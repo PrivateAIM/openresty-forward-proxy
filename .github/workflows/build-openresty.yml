@@ -1,0 +1,53 @@
+name: "Build OpenResty container image"
+
+on:
+  push:
+    tags:
+      - "openresty-*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  OPENRESTY_VERSION: "1.27.1.2-1"
+  NGINX_VERSION: "1.27.1"
+  NGINX_PROXY_MODULE_VERSION: "0.0.7"
+  NGINX_PROXY_MODULE_PATCH_FILE: "proxy_connect_rewrite_102101.patch"
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Clone OpenResty Docker repository
+        shell: bash
+        run: |
+          git clone https://github.com/openresty/docker-openresty.git --branch ${{ env.OPENRESTY_VERSION }} --single-branch docker-openresty --depth 1
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+      - name: Build and push container image
+        uses: docker/build-push-action@v5
+        with:
+          context: docker-openresty
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            RESTY_J=4
+            RESTY_EVAL_POST_DOWNLOAD_PRE_CONFIGURE=curl -fSL https://github.com/chobits/ngx_http_proxy_connect_module/archive/refs/tags/v${{ env.NGINX_PROXY_MODULE_VERSION }}.tar.gz -o ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}.tar.gz && tar xzf ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}.tar.gz
+            RESTY_CONFIG_OPTIONS_MORE=--add-module=ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}
+            RESTY_EVAL_PRE_MAKE=patch -d build/nginx-${{ env.NGINX_VERSION }}/ -p 1 < ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}/patch/${{ env.NGINX_PROXY_MODULE_PATCH_FILE }}
