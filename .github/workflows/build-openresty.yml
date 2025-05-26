@@ -26,6 +26,11 @@ jobs:
         shell: bash
         run: |
           git clone https://github.com/openresty/docker-openresty.git --branch ${{ env.OPENRESTY_VERSION }} --single-branch docker-openresty --depth 1
+      - name: Add additional files to Dockerfile
+        shell: bash
+        run: |
+          cp proxy.conf docker-entrypoint.sh docker-openresty
+          sed -i '/CMD/s/^/COPY proxy.conf \/etc\/nginx\/conf.d\/proxy.conf\nCOPY docker-entrypoint.sh \/docker-entrypoint.sh\nENTRYPOINT ["\/docker-entrypoint.sh"]\n/' docker-openresty/alpine/Dockerfile
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -49,6 +54,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             RESTY_J=4
+            RESTY_ADD_PACKAGE_RUNDEPS=apache2-utils
             RESTY_EVAL_POST_DOWNLOAD_PRE_CONFIGURE=curl -fSL https://github.com/chobits/ngx_http_proxy_connect_module/archive/refs/tags/v${{ env.NGINX_PROXY_MODULE_VERSION }}.tar.gz -o ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}.tar.gz && tar xzf ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}.tar.gz
             RESTY_CONFIG_OPTIONS_MORE=--add-module=ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}
             RESTY_EVAL_PRE_MAKE=patch -d build/nginx-${{ env.NGINX_VERSION }}/ -p 1 < ngx_http_proxy_connect_module-${{ env.NGINX_PROXY_MODULE_VERSION }}/patch/${{ env.NGINX_PROXY_MODULE_PATCH_FILE }}
