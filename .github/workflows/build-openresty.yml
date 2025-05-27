@@ -3,7 +3,7 @@ name: "Build OpenResty container image"
 on:
   push:
     tags:
-      - "openresty-*"
+      - "*"
 
 env:
   REGISTRY: ghcr.io
